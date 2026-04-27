@@ -14,3 +14,15 @@ Demonstrar a comunicação entre processos distribuídos utilizando Redis como m
 - Python
 - Redis
 - Docker
+
+# Como Executar
+1. Subir o Redis
+docker compose up -dusar
+Verificar se está rodando:
+docker ps
+2. Instalar dependências
+pip install -r requirements.txt
+3. Rodar o servidor
+python server/server.py
+4. Rodar o cliente
+python client/client.py
