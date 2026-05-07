@@ -1,83 +1,116 @@
 import json
-import redis
+import os
 from datetime import datetime
 
-r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+import redis
 
-pubsub = r.pubsub()
-pubsub.subscribe('redis_requests')
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
-print("Servidor aguardando mensagens...")
+REQUEST_CHANNEL = "redis_requests"
+RESPONSE_CHANNEL = "redis_responses"
 
-def enviar_resposta(status, result):
+r = redis.Redis(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    decode_responses=True,
+    socket_connect_timeout=5,
+    socket_timeout=5,
+)
+
+
+def enviar_resposta(request_id, status, result):
     resposta = {
+        "request_id": request_id,
         "status": status,
-        "result": result
+        "result": result,
     }
+    r.publish(RESPONSE_CHANNEL, json.dumps(resposta, ensure_ascii=False))
 
-    r.publish('redis_responses', json.dumps(resposta, ensure_ascii=False))
 
 def salvar_em_arquivo(texto):
     with open("arquivo_servidor.txt", "a", encoding="utf-8") as arquivo:
         arquivo.write(f"[{datetime.now()}] {texto}\n")
 
+
 def calcular(a, b, operador):
     if operador == "+":
         return a + b
-    elif operador == "-":
+    if operador == "-":
         return a - b
-    elif operador == "*":
+    if operador == "*":
         return a * b
-    elif operador == "/":
+    if operador == "/":
         if b == 0:
-            raise ValueError("Não é possível dividir por zero.")
+            raise ValueError("Nao e possivel dividir por zero.")
         return a / b
-    else:
-        raise ValueError("Operador inválido.")
+    raise ValueError("Operador invalido.")
 
-for message in pubsub.listen():
-    if message['type'] == 'message':
+
+def processar_requisicao(data):
+    operation = data.get("operation")
+
+    if operation == "message":
+        conteudo = data.get("content", "")
+        return f"Mensagem recebida pelo servidor: {conteudo}"
+
+    if operation == "file":
+        conteudo = data.get("content", "")
+        salvar_em_arquivo(conteudo)
+        return "Arquivo texto do servidor atualizado com sucesso."
+
+    if operation == "calc":
+        a = float(data["a"])
+        b = float(data["b"])
+        operador = data["operator"]
+        resultado = calcular(a, b, operador)
+        return f"Resultado: {a} {operador} {b} = {resultado}"
+
+    raise ValueError("Operacao invalida.")
+
+
+try:
+    r.ping()
+except redis.exceptions.RedisError as erro:
+    print(f"Erro: nao foi possivel conectar ao Redis em {REDIS_HOST}:{REDIS_PORT}.")
+    print(f"Detalhes: {erro}")
+    raise SystemExit(1)
+
+
+pubsub = r.pubsub(ignore_subscribe_messages=True)
+pubsub.subscribe(REQUEST_CHANNEL)
+
+print(f"Servidor Pub/Sub conectado em {REDIS_HOST}:{REDIS_PORT}.")
+print(f"Aguardando mensagens no canal '{REQUEST_CHANNEL}'...")
+
+try:
+    for message in pubsub.listen():
+        if message["type"] != "message":
+            continue
+
+        request_id = None
         try:
-            data = json.loads(message['data'])
+            data = json.loads(message["data"])
+            request_id = data.get("request_id")
+
+            if not request_id:
+                raise ValueError("Requisicao sem request_id.")
+
             print(f"Recebido: {data}")
+            resultado = processar_requisicao(data)
+            enviar_resposta(request_id, "ok", resultado)
 
-            operation = data.get("operation")
-
-            if operation == "message":
-                conteudo = data.get("content", "")
-                enviar_resposta(
-                    "ok",
-                    f"Mensagem recebida pelo servidor: {conteudo}"
-                )
-
-            elif operation == "file":
-                conteudo = data.get("content", "")
-                salvar_em_arquivo(conteudo)
-                enviar_resposta(
-                    "ok",
-                    "Arquivo texto do servidor atualizado com sucesso."
-                )
-
-            elif operation == "calc":
-                a = float(data.get("a"))
-                b = float(data.get("b"))
-                operador = data.get("operator")
-
-                resultado = calcular(a, b, operador)
-
-                enviar_resposta(
-                    "ok",
-                    f"Resultado: {a} {operador} {b} = {resultado}"
-                )
-
-            else:
-                enviar_resposta(
-                    "erro",
-                    "Operação inválida."
-                )
-
+        except json.JSONDecodeError:
+            print("Erro: requisicao com JSON invalido.")
         except Exception as erro:
-            enviar_resposta(
-                "erro",
-                f"Erro ao processar requisição: {erro}"
-            )
+            print(f"Erro ao processar requisicao: {erro}")
+            if request_id:
+                enviar_resposta(
+                    request_id,
+                    "erro",
+                    f"Erro ao processar requisicao: {erro}",
+                )
+except KeyboardInterrupt:
+    print("\nServidor encerrado.")
+finally:
+    pubsub.close()
