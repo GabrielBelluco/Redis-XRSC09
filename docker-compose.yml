@@ -1,6 +1,46 @@
 version: '3'
 services:
   redis:
-    image: redis:7
+    image: redis:8.6
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  calc_worker:
+    build: .
+    command: python /app/Server/calc_worker.py
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    restart: unless-stopped
+
+  message_worker:
+    build: .
+    command: python /app/Server/message_worker.py
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    restart: unless-stopped
+
+  file_worker:
+    build: .
+    command: python /app/Server/file_worker.py
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
