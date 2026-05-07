@@ -1,21 +1,31 @@
-import json
+import os
 import uuid
-import redis
 from datetime import datetime
 
-from Server.common import (
-    get_redis,
-    setup_logging,
-    ensure_consumer_group,
-    REQUESTS_STREAM,
-    RESPONSES_STREAM,
-    CLIENT_GROUP,
-)
+import redis
 
-r = get_redis()
-log = setup_logging("client")
+REDIS_HOST = os.getenv("REDIS_HOST", "192.168.0.8")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
-ensure_consumer_group(r, RESPONSES_STREAM, CLIENT_GROUP)
+REQUESTS_STREAM = "requests_stream"
+RESPONSES_STREAM = "responses_stream"
+CLIENT_GROUP = "client_group"
+
+r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+
+
+def log(level, msg, **kwargs):
+    print(f"[{level}] {msg} {kwargs}")
+
+
+def ensure_consumer_group(stream, group):
+    try:
+        r.xgroup_create(stream, group, id="0", mkstream=True)
+    except redis.exceptions.ResponseError:
+        pass
+
+
+ensure_consumer_group(RESPONSES_STREAM, CLIENT_GROUP)
 
 CONSUMER_NAME = f"client-{uuid.uuid4().hex[:8]}"
 
@@ -53,12 +63,13 @@ def wait_for_response(request_id, timeout_ms=10000):
 
 while True:
     print("\n===== Cliente Redis (Streams) =====")
+    print(f"Redis: {REDIS_HOST}:{REDIS_PORT}")
     print("1 - Enviar mensagem de texto")
     print("2 - Alterar arquivo texto no servidor")
-    print("3 - Realizar cálculo")
+    print("3 - Realizar calculo")
     print("0 - Sair")
 
-    opcao = input("Escolha uma opção: ")
+    opcao = input("Escolha uma opcao: ")
 
     if opcao == "1":
         mensagem = input("Digite uma mensagem: ")
@@ -79,9 +90,9 @@ while True:
             print("Timeout: nenhuma resposta recebida.")
 
     elif opcao == "3":
-        a = float(input("Digite o primeiro número: "))
+        a = float(input("Digite o primeiro numero: "))
         operador = input("Digite o operador (+, -, *, /): ")
-        b = float(input("Digite o segundo número: "))
+        b = float(input("Digite o segundo numero: "))
         rid = send_request("calc", a=a, b=b, operator=operador)
         resp = wait_for_response(rid)
         if resp:
@@ -94,4 +105,4 @@ while True:
         break
 
     else:
-        print("Opção inválida.")
+        print("Opcao invalida.")

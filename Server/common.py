@@ -1,14 +1,20 @@
 import json
+import os
 import time
 import redis
 from datetime import datetime
 
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
+REDIS_HOST = os.getenv("REDIS_HOST", "192.168.0.8")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
 REQUESTS_STREAM = "requests_stream"
 RESPONSES_STREAM = "responses_stream"
 DEAD_LETTER_STREAM = "dead_letter_stream"
+
+CALC_GROUP = "calc_group"
+MESSAGE_GROUP = "message_group"
+FILE_GROUP = "file_group"
+CLIENT_GROUP = "client_group"
 
 IDEMPOTENCY_TTL = 30
 RETRY_TTL = 60
@@ -36,7 +42,10 @@ def setup_logging(name):
 
 def is_duplicate(r, request_id):
     key = f"idempotency:{request_id}"
-    return r.setnx(key, "1") == 0
+    created = r.setnx(key, "1")
+    if created:
+        r.expire(key, IDEMPOTENCY_TTL)
+    return not created
 
 
 def get_retry_count(r, request_id):
