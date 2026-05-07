@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 
 RESULT_TTL_SECONDS = 300
-HISTORY_KEY = "historico_requisicoes"
+HISTORY_KEY = "request_history"
 HISTORY_LIMIT = 10
 
 
@@ -25,3 +25,15 @@ def salvar_resultado_compartilhado(redis_client, request_id, operation, status, 
     pipe.execute()
 
     return result_key
+
+
+def set_last_calc(redis_client, result):
+    redis_client.set("last_calc", result)
+
+
+def set_last_message(redis_client, message):
+    redis_client.set("last_message", message)
+
+
+def increment_calc_requests(redis_client):
+    redis_client.incr("calc_requests")

@@ -31,7 +31,7 @@ REDIS_HOST, REDIS_PORT = carregar_config()
 REQUEST_CHANNEL = "redis_requests"
 RESPONSE_CHANNEL = "redis_responses"
 RESPONSE_TIMEOUT_SECONDS = 10
-HISTORY_KEY = "historico_requisicoes"
+HISTORY_KEY = "request_history"
 HISTORY_LIMIT = 10
 
 r = redis.Redis(
@@ -124,33 +124,6 @@ def ler_float(mensagem):
             print("Valor invalido. Digite um numero.")
 
 
-def mostrar_historico():
-    try:
-        historico = r.lrange(HISTORY_KEY, 0, HISTORY_LIMIT - 1)
-    except redis.exceptions.RedisError as erro:
-        print(f"Erro ao buscar historico: {erro}")
-        return
-
-    if not historico:
-        print("Historico vazio.")
-        return
-
-    print("\n===== Historico compartilhado no Redis =====")
-    for indice, item in enumerate(historico, start=1):
-        try:
-            dados = json.loads(item)
-        except json.JSONDecodeError:
-            print(f"{indice}. Registro invalido: {item}")
-            continue
-
-        print(
-            f"{indice}. [{dados.get('processed_at')}] "
-            f"{dados.get('operation')} ({dados.get('status')}) - "
-            f"{dados.get('result')}"
-        )
-        print(f"   chave: {dados.get('result_key')}")
-
-
 if not verificar_conexao():
     raise SystemExit(1)
 
@@ -161,7 +134,7 @@ while True:
     print("1 - Enviar mensagem de texto")
     print("2 - Alterar arquivo texto no servidor")
     print("3 - Realizar calculo")
-    print("4 - Ver historico compartilhado")
+    print("4 - Ver historico")
     print("0 - Sair")
 
     opcao = input("Escolha uma opcao: ")
@@ -193,7 +166,9 @@ while True:
         })
 
     elif opcao == "4":
-        mostrar_historico()
+        enviar_requisicao({
+            "operation": "history",
+        })
 
     elif opcao == "0":
         print("Cliente encerrado.")
