@@ -31,6 +31,8 @@ REDIS_HOST, REDIS_PORT = carregar_config()
 REQUEST_CHANNEL = "redis_requests"
 RESPONSE_CHANNEL = "redis_responses"
 RESPONSE_TIMEOUT_SECONDS = 10
+HISTORY_KEY = "historico_requisicoes"
+HISTORY_LIMIT = 10
 
 r = redis.Redis(
     host=REDIS_HOST,
@@ -51,6 +53,14 @@ def verificar_conexao():
     return True
 
 
+def buscar_resultado(result_key):
+    try:
+        return r.hgetall(result_key)
+    except redis.exceptions.RedisError as erro:
+        print(f"Erro ao buscar resultado compartilhado: {erro}")
+        return {}
+
+
 def enviar_requisicao(requisicao):
     request_id = str(uuid.uuid4())
     requisicao["request_id"] = request_id
@@ -59,7 +69,10 @@ def enviar_requisicao(requisicao):
 
     try:
         pubsub.subscribe(RESPONSE_CHANNEL)
-        r.publish(REQUEST_CHANNEL, json.dumps(requisicao, ensure_ascii=False))
+        inscritos = r.publish(REQUEST_CHANNEL, json.dumps(requisicao, ensure_ascii=False))
+        if inscritos == 0:
+            print("Aviso: nenhum servidor inscrito no canal de requisicoes.")
+
         print("Aguardando resposta...")
 
         fim = time.time() + RESPONSE_TIMEOUT_SECONDS
@@ -77,12 +90,22 @@ def enviar_requisicao(requisicao):
             if resposta.get("request_id") != request_id:
                 continue
 
-            status = resposta.get("status", "erro")
-            result = resposta.get("result", "")
-            if status == "ok":
-                print("Resposta do servidor:", result)
+            result_key = resposta.get("result_key")
+            if not result_key:
+                print("Erro: servidor nao informou a chave do resultado.")
+                return
+
+            dados = buscar_resultado(result_key)
+            if not dados:
+                print(f"Erro: resultado nao encontrado no Redis ({result_key}).")
+                return
+
+            if dados.get("status") == "ok":
+                print("Resposta do servidor:", dados.get("result", ""))
             else:
-                print("Erro do servidor:", result)
+                print("Erro do servidor:", dados.get("result", ""))
+
+            print(f"Resultado salvo no Redis em: {result_key}")
             return
 
         print("Timeout: nenhuma resposta recebida do servidor.")
@@ -101,6 +124,33 @@ def ler_float(mensagem):
             print("Valor invalido. Digite um numero.")
 
 
+def mostrar_historico():
+    try:
+        historico = r.lrange(HISTORY_KEY, 0, HISTORY_LIMIT - 1)
+    except redis.exceptions.RedisError as erro:
+        print(f"Erro ao buscar historico: {erro}")
+        return
+
+    if not historico:
+        print("Historico vazio.")
+        return
+
+    print("\n===== Historico compartilhado no Redis =====")
+    for indice, item in enumerate(historico, start=1):
+        try:
+            dados = json.loads(item)
+        except json.JSONDecodeError:
+            print(f"{indice}. Registro invalido: {item}")
+            continue
+
+        print(
+            f"{indice}. [{dados.get('processed_at')}] "
+            f"{dados.get('operation')} ({dados.get('status')}) - "
+            f"{dados.get('result')}"
+        )
+        print(f"   chave: {dados.get('result_key')}")
+
+
 if not verificar_conexao():
     raise SystemExit(1)
 
@@ -111,6 +161,7 @@ while True:
     print("1 - Enviar mensagem de texto")
     print("2 - Alterar arquivo texto no servidor")
     print("3 - Realizar calculo")
+    print("4 - Ver historico compartilhado")
     print("0 - Sair")
 
     opcao = input("Escolha uma opcao: ")
@@ -140,6 +191,9 @@ while True:
             "b": b,
             "operator": operador,
         })
+
+    elif opcao == "4":
+        mostrar_historico()
 
     elif opcao == "0":
         print("Cliente encerrado.")
