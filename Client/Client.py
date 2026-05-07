@@ -1,12 +1,32 @@
 import json
-import os
 import time
 import uuid
+from pathlib import Path
 
 import redis
 
-REDIS_HOST = os.getenv("REDIS_HOST", "192.168.0.8")
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+
+def carregar_config():
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        print("Erro: arquivo .env nao encontrado.")
+        raise SystemExit(1)
+
+    config = {}
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            config[key.strip()] = value.strip()
+
+    if "REDIS_HOST" not in config or "REDIS_PORT" not in config:
+        print("Erro: .env precisa ter REDIS_HOST e REDIS_PORT.")
+        raise SystemExit(1)
+
+    return config["REDIS_HOST"], int(config["REDIS_PORT"])
+
+
+REDIS_HOST, REDIS_PORT = carregar_config()
 
 REQUEST_CHANNEL = "redis_requests"
 RESPONSE_CHANNEL = "redis_responses"
