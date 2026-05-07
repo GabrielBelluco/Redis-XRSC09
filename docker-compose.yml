@@ -3,7 +3,7 @@ services:
   redis:
     image: redis:8.6
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -18,7 +18,7 @@ services:
         condition: service_healthy
     environment:
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: ${REDIS_PORT:-6379}
     restart: unless-stopped
 
   message_worker:
@@ -29,7 +29,7 @@ services:
         condition: service_healthy
     environment:
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: ${REDIS_PORT:-6379}
     restart: unless-stopped
 
   file_worker:
@@ -40,7 +40,7 @@ services:
         condition: service_healthy
     environment:
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: ${REDIS_PORT:-6379}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
