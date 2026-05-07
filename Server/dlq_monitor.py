@@ -1,12 +1,21 @@
 import time
 
-from Server.common import (
-    get_redis,
-    setup_logging,
-    ensure_consumer_group,
-    DEAD_LETTER_STREAM,
-    CLIENT_GROUP,
-)
+try:
+    from Server.common import (
+        get_redis,
+        setup_logging,
+        ensure_consumer_group,
+        DEAD_LETTER_STREAM,
+        CLIENT_GROUP,
+    )
+except ModuleNotFoundError:
+    from common import (
+        get_redis,
+        setup_logging,
+        ensure_consumer_group,
+        DEAD_LETTER_STREAM,
+        CLIENT_GROUP,
+    )
 
 r = get_redis()
 log = setup_logging("dlq_monitor")

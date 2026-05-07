@@ -1,15 +1,26 @@
 import time
 from datetime import datetime
 
-from Server.common import (
-    get_redis,
-    setup_logging,
-    ensure_consumer_group,
-    handle_processing,
-    claim_pending,
-    REQUESTS_STREAM,
-    FILE_GROUP,
-)
+try:
+    from Server.common import (
+        get_redis,
+        setup_logging,
+        ensure_consumer_group,
+        handle_processing,
+        claim_pending,
+        REQUESTS_STREAM,
+        FILE_GROUP,
+    )
+except ModuleNotFoundError:
+    from common import (
+        get_redis,
+        setup_logging,
+        ensure_consumer_group,
+        handle_processing,
+        claim_pending,
+        REQUESTS_STREAM,
+        FILE_GROUP,
+    )
 
 r = get_redis()
 log = setup_logging("file_worker")

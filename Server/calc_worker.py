@@ -1,14 +1,25 @@
 import time
 
-from Server.common import (
-    get_redis,
-    setup_logging,
-    ensure_consumer_group,
-    handle_processing,
-    claim_pending,
-    REQUESTS_STREAM,
-    CALC_GROUP,
-)
+try:
+    from Server.common import (
+        get_redis,
+        setup_logging,
+        ensure_consumer_group,
+        handle_processing,
+        claim_pending,
+        REQUESTS_STREAM,
+        CALC_GROUP,
+    )
+except ModuleNotFoundError:
+    from common import (
+        get_redis,
+        setup_logging,
+        ensure_consumer_group,
+        handle_processing,
+        claim_pending,
+        REQUESTS_STREAM,
+        CALC_GROUP,
+    )
 
 r = get_redis()
 log = setup_logging("calc_worker")
