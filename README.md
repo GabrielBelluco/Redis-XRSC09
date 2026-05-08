@@ -93,3 +93,6 @@ alterar o codigo.
 
 Se `REDIS_HOST` ou `REDIS_PORT` nao estiverem definidos, o programa mostra erro
 e encerra.
+
+
+## Toda documentação do trabalho (Relatório e Slides) está presente na pasta "docs"
