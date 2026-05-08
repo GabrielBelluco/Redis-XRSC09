@@ -1,9 +1,13 @@
 import json
 import socket
-from datetime import datetime
 from pathlib import Path
 
 import redis
+
+from data_sharing import salvar_resultado_compartilhado
+from operations.calc_operation import processar_calculo
+from operations.file_operation import processar_arquivo
+from operations.message_operation import processar_mensagem
 
 
 def carregar_config():
@@ -52,52 +56,26 @@ def obter_ips_locais():
     return ips
 
 
-def enviar_resposta(request_id, status, result):
+def enviar_resposta(request_id, status, result_key):
     resposta = {
         "request_id": request_id,
         "status": status,
-        "result": result,
+        "result_key": result_key,
     }
     r.publish(RESPONSE_CHANNEL, json.dumps(resposta, ensure_ascii=False))
-
-
-def salvar_em_arquivo(texto):
-    with open("arquivo_servidor.txt", "a", encoding="utf-8") as arquivo:
-        arquivo.write(f"[{datetime.now()}] {texto}\n")
-
-
-def calcular(a, b, operador):
-    if operador == "+":
-        return a + b
-    if operador == "-":
-        return a - b
-    if operador == "*":
-        return a * b
-    if operador == "/":
-        if b == 0:
-            raise ValueError("Nao e possivel dividir por zero.")
-        return a / b
-    raise ValueError("Operador invalido.")
 
 
 def processar_requisicao(data):
     operation = data.get("operation")
 
     if operation == "message":
-        conteudo = data.get("content", "")
-        return f"Mensagem recebida pelo servidor: {conteudo}"
+        return processar_mensagem(data)
 
     if operation == "file":
-        conteudo = data.get("content", "")
-        salvar_em_arquivo(conteudo)
-        return "Arquivo texto do servidor atualizado com sucesso."
+        return processar_arquivo(data)
 
     if operation == "calc":
-        a = float(data["a"])
-        b = float(data["b"])
-        operador = data["operator"]
-        resultado = calcular(a, b, operador)
-        return f"Resultado: {a} {operador} {b} = {resultado}"
+        return processar_calculo(data)
 
     raise ValueError("Operacao invalida.")
 
@@ -125,26 +103,42 @@ try:
             continue
 
         request_id = None
+        operation = None
         try:
             data = json.loads(message["data"])
             request_id = data.get("request_id")
+            operation = data.get("operation")
 
             if not request_id:
                 raise ValueError("Requisicao sem request_id.")
 
             print(f"Recebido: {data}")
             resultado = processar_requisicao(data)
-            enviar_resposta(request_id, "ok", resultado)
+            result_key = salvar_resultado_compartilhado(
+                r,
+                request_id,
+                operation,
+                "ok",
+                resultado,
+            )
+            enviar_resposta(request_id, "ok", result_key)
 
         except json.JSONDecodeError:
             print("Erro: requisicao com JSON invalido.")
         except Exception as erro:
             print(f"Erro ao processar requisicao: {erro}")
             if request_id:
+                result_key = salvar_resultado_compartilhado(
+                    r,
+                    request_id,
+                    operation,
+                    "erro",
+                    f"Erro ao processar requisicao: {erro}",
+                )
                 enviar_resposta(
                     request_id,
                     "erro",
-                    f"Erro ao processar requisicao: {erro}",
+                    result_key,
                 )
 except KeyboardInterrupt:
     print("\nServidor encerrado.")
