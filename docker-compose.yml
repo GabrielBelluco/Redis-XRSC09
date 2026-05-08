@@ -1,4 +1,3 @@
-version: '3'
 services:
   redis:
     image: redis:8.6
@@ -12,7 +11,7 @@ services:
 
   calc_worker:
     build: .
-    command: python /app/Server/calc_worker.py
+    command: python -u /app/Server/calc_worker.py
     depends_on:
       redis:
         condition: service_healthy
@@ -23,7 +22,7 @@ services:
 
   message_worker:
     build: .
-    command: python /app/Server/message_worker.py
+    command: python -u /app/Server/message_worker.py
     depends_on:
       redis:
         condition: service_healthy
@@ -34,7 +33,7 @@ services:
 
   file_worker:
     build: .
-    command: python /app/Server/file_worker.py
+    command: python -u /app/Server/file_worker.py
     depends_on:
       redis:
         condition: service_healthy

@@ -31,8 +31,8 @@ except redis.exceptions.RedisError as erro:
 pubsub = r.pubsub(ignore_subscribe_messages=True)
 pubsub.subscribe(REQUEST_CHANNEL)
 
-print(f"message_worker conectado em {REDIS_HOST}:{REDIS_PORT}.")
-print(f"Aguardando mensagens no canal '{REQUEST_CHANNEL}'...")
+print(f"message_worker conectado em {REDIS_HOST}:{REDIS_PORT}.", flush=True)
+print(f"Aguardando mensagens no canal '{REQUEST_CHANNEL}'...", flush=True)
 
 try:
     for message in pubsub.listen():
@@ -50,7 +50,7 @@ try:
             if not request_id:
                 raise ValueError("Requisicao sem request_id.")
 
-            print(f"message_worker recebido: {data}")
+            print(f"message_worker recebido: {data}", flush=True)
 
             if operation == "message":
                 resultado = processar_mensagem(data)
@@ -70,9 +70,9 @@ try:
             r.publish(RESPONSE_CHANNEL, json.dumps(resposta, ensure_ascii=False))
 
         except json.JSONDecodeError:
-            print("Erro: requisicao com JSON invalido.")
+            print("Erro: requisicao com JSON invalido.", flush=True)
         except Exception as erro:
-            print(f"Erro ao processar requisicao: {erro}")
+            print(f"Erro ao processar requisicao: {erro}", flush=True)
             if request_id:
                 result_key = salvar_resultado_compartilhado(
                     r, request_id, operation, "erro", f"Erro: {erro}"
@@ -85,6 +85,6 @@ try:
                 r.publish(RESPONSE_CHANNEL, json.dumps(resposta, ensure_ascii=False))
 
 except KeyboardInterrupt:
-    print("\nmessage_worker encerrado.")
+    print("\nmessage_worker encerrado.", flush=True)
 finally:
     pubsub.close()

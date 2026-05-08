@@ -30,7 +30,7 @@ REDIS_HOST, REDIS_PORT = carregar_config()
 
 REQUEST_CHANNEL = "redis_requests"
 RESPONSE_CHANNEL = "redis_responses"
-RESPONSE_TIMEOUT_SECONDS = 10
+RESPONSE_TIMEOUT_SECONDS = 30
 HISTORY_KEY = "request_history"
 HISTORY_LIMIT = 10
 
@@ -38,8 +38,8 @@ r = redis.Redis(
     host=REDIS_HOST,
     port=REDIS_PORT,
     decode_responses=True,
-    socket_connect_timeout=5,
-    socket_timeout=5,
+    socket_connect_timeout=30,
+    socket_timeout=30,
 )
 
 
@@ -70,6 +70,7 @@ def enviar_requisicao(requisicao):
     try:
         pubsub.subscribe(RESPONSE_CHANNEL)
         inscritos = r.publish(REQUEST_CHANNEL, json.dumps(requisicao, ensure_ascii=False))
+        print(f"Requisicao publicada em '{REQUEST_CHANNEL}' para {inscritos} inscrito(s).")
         if inscritos == 0:
             print("Aviso: nenhum servidor inscrito no canal de requisicoes.")
 
