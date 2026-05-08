@@ -1,0 +1,90 @@
+import json
+
+import redis
+
+from config import carregar_config
+from data_sharing import salvar_resultado_compartilhado, set_last_message
+from operations.message_operation import processar_mensagem
+from operations.history_operation import processar_history
+
+
+REDIS_HOST, REDIS_PORT = carregar_config()
+
+REQUEST_CHANNEL = "redis_requests"
+RESPONSE_CHANNEL = "redis_responses"
+
+r = redis.Redis(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    decode_responses=True,
+    socket_connect_timeout=5,
+    socket_timeout=5,
+)
+
+try:
+    r.ping()
+except redis.exceptions.RedisError as erro:
+    print(f"Erro: nao foi possivel conectar ao Redis em {REDIS_HOST}:{REDIS_PORT}.")
+    print(f"Detalhes: {erro}")
+    raise SystemExit(1)
+
+pubsub = r.pubsub(ignore_subscribe_messages=True)
+pubsub.subscribe(REQUEST_CHANNEL)
+
+print(f"message_worker conectado em {REDIS_HOST}:{REDIS_PORT}.", flush=True)
+print(f"Aguardando mensagens no canal '{REQUEST_CHANNEL}'...", flush=True)
+
+try:
+    for message in pubsub.listen():
+        if message["type"] != "message":
+            continue
+
+        try:
+            data = json.loads(message["data"])
+            request_id = data.get("request_id")
+            operation = data.get("operation")
+
+            if operation not in ("message", "history"):
+                continue
+
+            if not request_id:
+                raise ValueError("Requisicao sem request_id.")
+
+            print(f"message_worker recebido: {data}", flush=True)
+
+            if operation == "message":
+                resultado = processar_mensagem(data)
+                set_last_message(r, data.get("content", ""))
+            else:
+                resultado = processar_history(r)
+
+            result_key = salvar_resultado_compartilhado(
+                r, request_id, operation, "ok", resultado
+            )
+
+            resposta = {
+                "request_id": request_id,
+                "status": "ok",
+                "result_key": result_key,
+            }
+            r.publish(RESPONSE_CHANNEL, json.dumps(resposta, ensure_ascii=False))
+
+        except json.JSONDecodeError:
+            print("Erro: requisicao com JSON invalido.", flush=True)
+        except Exception as erro:
+            print(f"Erro ao processar requisicao: {erro}", flush=True)
+            if request_id:
+                result_key = salvar_resultado_compartilhado(
+                    r, request_id, operation, "erro", f"Erro: {erro}"
+                )
+                resposta = {
+                    "request_id": request_id,
+                    "status": "erro",
+                    "result_key": result_key,
+                }
+                r.publish(RESPONSE_CHANNEL, json.dumps(resposta, ensure_ascii=False))
+
+except KeyboardInterrupt:
+    print("\nmessage_worker encerrado.", flush=True)
+finally:
+    pubsub.close()
